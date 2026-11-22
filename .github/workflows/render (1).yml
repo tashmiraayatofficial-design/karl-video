@@ -1,0 +1,65 @@
+name: Render video
+
+on:
+  workflow_dispatch:
+    inputs:
+      frames:
+        description: "Frame range for a quick test, e.g. 0-89 (3 seconds). Leave empty for the full video."
+        required: false
+        default: ""
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: System libraries for Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libdbus-1-3 libatk1.0-0t64 libatk-bridge2.0-0t64 libasound2t64 libxrandr2 libxkbcommon0 libxfixes3 libxcomposite1 libxdamage1 libgbm1 libcups2t64 || true
+
+      - name: Unzip project
+        run: |
+          ZIP=$(ls ./*.zip | head -n 1)
+          echo "Using $ZIP"
+          mkdir -p project
+          unzip -qo "$ZIP" -d project
+          PKG=$(find project -maxdepth 3 -name package.json -not -path "*/node_modules/*" | head -n 1)
+          DIR=$(dirname "$PKG")
+          echo "Project folder: $DIR"
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+
+      - name: Install packages
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm install
+
+      - name: Type check
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npx tsc --noEmit
+
+      - name: Render
+        working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          FRAMES: ${{ github.event.inputs.frames }}
+        run: |
+          VIDEO_BITRATE=12M
+          if [ -f render-settings.env ]; then . ./render-settings.env; fi
+          echo "Video bitrate: $VIDEO_BITRATE"
+          EXTRA=""
+          if [ -n "$FRAMES" ]; then EXTRA="--frames=$FRAMES"; fi
+          npx remotion render src/index.ts Main out/video.mp4 --codec h264 --video-bitrate=$VIDEO_BITRATE --audio-bitrate=128K --gl=swangle --concurrency=2 --timeout=120000 $EXTRA
+          ls -lh out
+
+      - name: Upload video
+        uses: actions/upload-artifact@v4
+        with:
+          name: video
+          path: ${{ env.PROJECT_DIR }}/out/video.mp4
+          compression-level: 0
+          retention-days: 14
