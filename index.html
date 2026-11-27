@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Karl Bushby — 30s Daylight Satellite Map</title>
+  <title>Karl Bushby — 30s Daylight Satellite Map (1-File Ready)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet" />
@@ -16,8 +16,8 @@
       --jungle-green: #00e676;
       --water-blue: #29b6f6;
       --text-white: #ffffff;
-      --glass-bg: rgba(11, 19, 43, 0.84);
-      --glass-border: rgba(255, 255, 255, 0.24);
+      --glass-bg: rgba(11, 19, 43, 0.86);
+      --glass-border: rgba(255, 255, 255, 0.28);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
     body {
@@ -43,6 +43,8 @@
     }
     body.render-mode #viewport-shell { transform: none !important; box-shadow: none; }
     .layer { position: absolute; inset: 0; width: 1080px; height: 1920px; overflow: hidden; }
+
+    /* Flat World Map Layer (S2-S6) */
     #flat-map-layer { background: var(--ocean-deep); perspective: 1100px; opacity: 0; }
     #flat-tilt-wrap { position: absolute; inset: 0; transform-style: preserve-3d; transform-origin: 540px 800px; }
     #flat-camera { position: absolute; top: 0; left: 0; width: 4000px; height: 2000px; transform-origin: 0 0; will-change: transform; }
@@ -53,15 +55,73 @@
       background-image: linear-gradient(rgba(41, 182, 246, 0.14) 2px, transparent 2px), linear-gradient(90deg, rgba(41, 182, 246, 0.14) 2px, transparent 2px);
       background-size: 90px 90px; opacity: 0; pointer-events: none;
     }
-    #globe-layer { background: radial-gradient(circle at 50% 38%, #10254a 0%, #060b16 68%, #02040a 100%); opacity: 0; }
-    #globe-camera { position: absolute; top: 220px; left: 40px; width: 1000px; height: 1000px; transform-origin: 500px 500px; will-change: transform; }
-    #globe-img {
-      width: 1000px; height: 1000px; border-radius: 50%; object-fit: cover;
-      filter: brightness(1.16) contrast(1.06) saturate(1.15);
-      box-shadow: 0 0 70px rgba(41, 182, 246, 0.35), inset 0 0 30px rgba(255, 255, 255, 0.12);
+
+    /* 3D Globe Layer (S1 & S7) - Uses the verified world map inside a 3D shaded sphere */
+    #globe-layer {
+      background:
+        radial-gradient(2px 2px at 140px 180px, rgba(255,255,255,0.6), transparent),
+        radial-gradient(2px 2px at 880px 260px, rgba(255,255,255,0.5), transparent),
+        radial-gradient(2px 2px at 260px 1240px, rgba(255,255,255,0.45), transparent),
+        radial-gradient(2px 2px at 920px 1120px, rgba(255,255,255,0.5), transparent),
+        radial-gradient(circle at 50% 38%, #10254a 0%, #060b16 68%, #02040a 100%);
+      opacity: 0;
     }
-    #globe-svg { position: absolute; top: 0; left: 0; width: 1000px; height: 1000px; overflow: visible; }
-    #vignette { pointer-events: none; background: radial-gradient(ellipse at 50% 42%, transparent 50%, rgba(4, 8, 20, 0.62) 100%); }
+    #globe-camera {
+      position: absolute;
+      top: 220px;
+      left: 40px;
+      width: 1000px;
+      height: 1000px;
+      transform-origin: 500px 500px;
+      will-change: transform;
+    }
+    #globe-sphere {
+      position: relative;
+      width: 1000px;
+      height: 1000px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #0a1f44;
+      box-shadow:
+        0 0 85px rgba(41, 182, 246, 0.42),
+        0 0 24px rgba(125, 211, 252, 0.35);
+    }
+    #globe-map-inner {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4000px;
+      height: 2000px;
+      transform-origin: 0 0;
+      transform: translate3d(-823px, -833.5px, 0) scale(1.05);
+    }
+    #globe-map-img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4000px;
+      height: 2000px;
+      object-fit: cover;
+      filter: brightness(1.22) contrast(1.08) saturate(1.22);
+    }
+    #globe-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4000px;
+      height: 2000px;
+      overflow: visible;
+    }
+    #globe-shading {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      pointer-events: none;
+      background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 46%, rgba(4, 12, 32, 0.45) 78%, rgba(2, 6, 18, 0.85) 100%);
+      box-shadow: inset 18px 18px 45px rgba(147, 197, 253, 0.22), inset -36px -36px 70px rgba(0, 0, 0, 0.65);
+    }
+
+    #vignette { pointer-events: none; background: radial-gradient(ellipse at 50% 42%, transparent 50%, rgba(4, 8, 20, 0.58) 100%); }
     #hud-layer { pointer-events: none; }
     .badge-pill {
       position: absolute; display: inline-flex; align-items: center; justify-content: center; gap: 14px;
@@ -72,9 +132,11 @@
     .badge-red { background: var(--alert-red); border-color: #ffffff; color: #ffffff; }
     .badge-green { background: #059669; border-color: var(--jungle-green); color: #ffffff; }
     .badge-yellow { background: var(--route-yellow); border-color: #ffffff; color: #0b132b; }
+
     #s1-hex-wrap { position: absolute; left: 540px; top: 560px; width: 420px; height: 460px; margin-left: -210px; margin-top: -230px; display: flex; align-items: center; justify-content: center; opacity: 0; }
     #s1-28-badge { left: 540px; top: 860px; transform: translate(-50%, 0); font-size: 64px; padding: 20px 52px; border-radius: 26px; }
     #s1-sub-pill { left: 540px; top: 1005px; transform: translate(-50%, 0); font-size: 32px; color: #e2e8f0; }
+
     #s2-avatar-card {
       position: absolute; left: 540px; top: 520px; width: 280px; height: 280px; margin-left: -140px; margin-top: -140px;
       border-radius: 50%; background: linear-gradient(145deg, #1e3a8a, #0f172a); border: 8px solid #ffffff;
@@ -82,8 +144,10 @@
     }
     #s2-name-pill { left: 540px; top: 720px; transform: translate(-50%, 0); font-size: 46px; color: var(--route-yellow); }
     #s2-role-pill { left: 540px; top: 830px; transform: translate(-50%, 0); font-size: 28px; color: #ffffff; }
+
     #s3-year-badge { left: 540px; top: 250px; transform: translate(-50%, 0); font-size: 54px; padding: 18px 48px; }
     #s3-place-pill { left: 540px; top: 375px; transform: translate(-50%, 0); font-size: 32px; color: var(--route-yellow); }
+
     #s4-row { position: absolute; left: 90px; top: 300px; width: 900px; display: flex; flex-direction: column; gap: 28px; opacity: 0; }
     .stat-card {
       display: flex; align-items: center; gap: 28px; padding: 28px 36px; border-radius: 28px;
@@ -95,12 +159,17 @@
     }
     .stat-text-main { font-size: 38px; font-weight: 900; color: #ffffff; text-transform: uppercase; }
     .stat-text-sub { font-size: 24px; font-weight: 700; color: #93c5fd; margin-top: 4px; }
-    #s5-dest-pill { left: 540px; top: 240px; transform: translate(-50%, 0); font-size: 36px; }
+
+    /* Repositioned cleanly below the Hull pin so it never overlaps */
+    #s5-dest-pill { left: 540px; top: 1120px; transform: translate(-50%, 0); font-size: 36px; }
+
     #s6-title-pill { left: 540px; top: 250px; transform: translate(-50%, 0); font-size: 46px; }
     #s6-icons-row { position: absolute; left: 90px; top: 520px; width: 900px; display: flex; justify-content: space-between; align-items: center; }
     .slam-hex { width: 260px; height: 280px; position: relative; display: flex; align-items: center; justify-content: center; opacity: 0; }
     #s6-foot-card { left: 540px; top: 930px; transform: translate(-50%, 0); font-size: 40px; padding: 24px 48px; }
-    #s7-year-badge { left: 540px; top: 240px; transform: translate(-50%, 0); font-size: 46px; padding: 18px 44px; }
+
+    #s7-year-badge { left: 540px; top: 230px; transform: translate(-50%, 0); font-size: 44px; padding: 18px 44px; }
+
     #subtitle-safe-guide {
       position: absolute; left: 90px; top: 1400px; width: 900px; height: 440px;
       border: 4px dashed rgba(255, 214, 0, 0.7); border-radius: 24px; background: rgba(255, 214, 0, 0.08);
@@ -120,10 +189,16 @@
 </head>
 <body>
   <div id="viewport-shell">
+    <!-- FLAT WORLD MAP (S2-S6) -->
     <div id="flat-map-layer" class="layer">
       <div id="flat-tilt-wrap">
         <div id="flat-camera">
-          <img id="flat-map-img" src="assets/images/world.200407.3x21600x10800.jpg" alt="World Map" />
+          <img
+            id="flat-map-img"
+            src="assets/images/world.200407.3x21600x10800.jpg"
+            onerror="this.onerror=null;this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Blue_Marble_2002.png/2560px-Blue_Marble_2002.png';"
+            alt="World Map"
+          />
           <svg id="flat-svg" viewBox="0 0 4000 2000">
             <defs>
               <filter id="glow-yellow" x="-30%" y="-30%" width="160%" height="160%">
@@ -147,33 +222,66 @@
       <div id="tactical-grid"></div>
     </div>
 
+    <!-- 3D SOUTH AMERICA GLOBE (S1 & S7) - Zero extra image needed! -->
     <div id="globe-layer" class="layer">
       <div id="globe-camera">
-        <img id="globe-img" src="assets/images/BlueMarble_2005_SAm_09_4096.jpg" alt="South America Globe" />
-        <svg id="globe-svg" viewBox="0 0 1000 1000">
-          <defs>
-            <filter id="globe-glow" x="-40%" y="-40%" width="180%" height="180%">
-              <feGaussianBlur stdDeviation="5" result="b" />
-              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-          </defs>
-          <polygon id="colombia-poly" points="392,250 432,248 455,286 438,325 396,312 378,282" fill="#00e676" fill-opacity="0" stroke="#ffffff" stroke-width="4" stroke-opacity="0" />
-          <path id="sa-route" d="M 465 842 C 446 775, 434 705, 428 635 C 424 575, 402 520, 376 468 C 356 425, 355 375, 378 330 C 392 302, 405 286, 412 272" fill="none" stroke="#ffd600" stroke-width="11" stroke-linecap="round" filter="url(#globe-glow)" opacity="0" />
-          <g id="globe-avatar" opacity="0" transform="translate(465, 842)">
-            <circle r="30" fill="#0b132b" stroke="#ffffff" stroke-width="5" />
-            <circle cx="0" cy="-7" r="8" fill="#ffd600" />
-            <path d="M -12 14 C -10 4, 10 4, 12 14" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
-          </g>
-          <g id="pin-colombia" opacity="0" transform="translate(412, 272)">
-            <circle r="36" fill="none" stroke="#00e676" stroke-width="5" id="pin-colombia-ring" />
-            <circle r="12" fill="#00e676" stroke="#ffffff" stroke-width="4" />
-          </g>
-        </svg>
+        <div id="globe-sphere">
+          <div id="globe-map-inner">
+            <img
+              id="globe-map-img"
+              src="assets/images/world.200407.3x21600x10800.jpg"
+              onerror="this.onerror=null;this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Blue_Marble_2002.png/2560px-Blue_Marble_2002.png';"
+              alt="Earth Globe"
+            />
+            <svg id="globe-svg" viewBox="0 0 4000 2000">
+              <defs>
+                <filter id="globe-glow" x="-40%" y="-40%" width="180%" height="180%">
+                  <feGaussianBlur stdDeviation="5" result="b" />
+                  <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+              </defs>
+              <!-- Colombia GPS Polygon (4000x2000 equirectangular) -->
+              <polygon
+                id="colombia-poly"
+                points="1150,870 1205,868 1248,930 1235,995 1170,1012 1135,960 1132,908"
+                fill="#00e676"
+                fill-opacity="0"
+                stroke="#ffffff"
+                stroke-width="4"
+                stroke-opacity="0"
+              />
+              <!-- GPS-accurate Yellow Route: Punta Arenas (1212,1591) -> Andes -> Peru -> Colombia (1177,949) -->
+              <path
+                id="sa-route"
+                d="M 1212 1591 C 1205 1510, 1212 1435, 1215 1371 C 1216 1300, 1192 1235, 1165 1175 C 1144 1133, 1126 1075, 1138 1020 C 1150 980, 1165 965, 1177 949"
+                fill="none"
+                stroke="#ffd600"
+                stroke-width="11"
+                stroke-linecap="round"
+                filter="url(#globe-glow)"
+                opacity="0"
+              />
+              <!-- Moving Karl Avatar Marker -->
+              <g id="globe-avatar" opacity="0" transform="translate(1212, 1591)">
+                <circle r="28" fill="#0b132b" stroke="#ffffff" stroke-width="5" />
+                <circle cx="0" cy="-6" r="7" fill="#ffd600" />
+                <path d="M -11 13 C -9 4, 9 4, 11 13" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
+              </g>
+              <!-- Colombia Pin -->
+              <g id="pin-colombia" opacity="0" transform="translate(1177, 949)">
+                <circle r="34" fill="none" stroke="#00e676" stroke-width="5" id="pin-colombia-ring" />
+                <circle r="12" fill="#00e676" stroke="#ffffff" stroke-width="4" />
+              </g>
+            </svg>
+          </div>
+          <div id="globe-shading"></div>
+        </div>
       </div>
     </div>
 
     <div id="vignette" class="layer"></div>
 
+    <!-- HUD OVERLAYS -->
     <div id="hud-layer" class="layer">
       <div id="s1-hex-wrap">
         <svg viewBox="0 0 220 240" width="380" height="415">
@@ -288,7 +396,7 @@
       { time: 12.60, file: "assets/sfx/mixkit-hard-pop-click-2364_2.wav", volume: 0.80 },
       { time: 15.25, file: "assets/sfx/dragon-studio-whoosh-cinematic-376875_2.mp3", volume: 0.75 },
       { time: 17.30, file: "assets/sfx/mixkit-bike-magical-bell-591_2.wav", volume: 0.85 },
-      { time: 18.80, file: "assets/sfx/mixkit-classic-alarm-995_2.wav", volume: 0.45 },
+      { time: 18.80, file: "assets/sfx/mixkit-classic-alarm-995_2.wav", volume: 0.35 },
       { time: 19.65, file: "assets/sfx/mixkit-hard-pop-click-2364_2.wav", volume: 0.90 },
       { time: 20.15, file: "assets/sfx/mixkit-hard-pop-click-2364_2.wav", volume: 0.90 },
       { time: 20.65, file: "assets/sfx/mixkit-hard-pop-click-2364_2.wav", volume: 0.90 },
@@ -359,7 +467,7 @@
 
       if (t <= 4.5) {
         const p1 = easeInOut(seg(t, 0, 4.36));
-        globeCamera.style.transform = `translate3d(0px, ${lerp(-40, 20, p1).toFixed(1)}px, 0) scale(${lerp(1.24, 0.98, p1).toFixed(4)})`;
+        globeCamera.style.transform = `translate3d(0px, ${lerp(-35, 20, p1).toFixed(1)}px, 0) scale(${lerp(1.22, 0.98, p1).toFixed(4)})`;
       }
       showPop(el("s1-hex-wrap"), t, 0.15, 0.65, 3.75, 4.25, "");
       showPop(el("s1-28-badge"), t, 0.70, 1.15, 3.80, 4.25);
@@ -431,7 +539,7 @@
 
       if (t >= 25.15) {
         const p7 = easeInOut(seg(t, 25.66, 30.10));
-        globeCamera.style.transform = `translate3d(${lerp(45, 78, p7).toFixed(1)}px, ${lerp(-165, 165, p7).toFixed(1)}px, 0) scale(${lerp(1.38, 1.52, p7).toFixed(4)})`;
+        globeCamera.style.transform = `translate3d(${lerp(55, 90, p7).toFixed(1)}px, ${lerp(-180, 195, p7).toFixed(1)}px, 0) scale(${lerp(1.36, 1.54, p7).toFixed(4)})`;
         const drawP = easeInOut(seg(t, 25.85, 29.20));
         saRoute.setAttribute("opacity", "1");
         saRoute.style.strokeDashoffset = ((1 - drawP) * saRouteLen).toFixed(2);
