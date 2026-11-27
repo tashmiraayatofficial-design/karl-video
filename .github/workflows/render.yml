@@ -1,0 +1,151 @@
+name: Render Map Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      fps:
+        description: "Frames per second (30 recommended)"
+        required: false
+        default: "30"
+      width:
+        description: "Video width (1080 for 9:16 Shorts)"
+        required: false
+        default: "1080"
+      height:
+        description: "Video height (1920 for 9:16 Shorts)"
+        required: false
+        default: "1920"
+      duration:
+        description: "Total duration in seconds"
+        required: true
+        default: "30.1"
+      audio_file:
+        description: "Optional voiceover path (e.g. assets/audio/voiceover.mp3)"
+        required: false
+        default: ""
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install FFmpeg and Playwright Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-extra
+          npm init -y
+          npm install playwright
+          npx playwright install chromium
+
+      - name: Capture frames and export SFX timeline
+        run: |
+          mkdir -p frames renders
+          node -e '
+            const { chromium } = require("playwright");
+            const fs = require("fs");
+            const path = require("path");
+            (async () => {
+              const fps = Number(process.env.FPS || 30);
+              const width = Number(process.env.WIDTH || 1080);
+              const height = Number(process.env.HEIGHT || 1920);
+              const duration = Number(process.env.DURATION || 30.1);
+              const totalFrames = Math.ceil(fps * duration);
+
+              const browser = await chromium.launch();
+              const page = await browser.newPage({ viewport: { width, height } });
+              await page.goto("file://" + path.resolve("index.html") + "?render=1", { waitUntil: "networkidle" });
+              await page.waitForTimeout(1000);
+
+              const sfxEvents = await page.evaluate(() => window.SFX_EVENTS || []);
+              fs.writeFileSync("renders/sfx_events.json", JSON.stringify(sfxEvents, null, 2));
+
+              for (let i = 0; i < totalFrames; i++) {
+                const t = i / fps;
+                await page.evaluate((time) => {
+                  if (typeof window.seekTo === "function") window.seekTo(time);
+                }, t);
+                const frameName = String(i).padStart(6, "0");
+                await page.screenshot({ path: `frames/frame_${frameName}.png` });
+              }
+              await browser.close();
+            })();
+          '
+        env:
+          FPS: ${{ github.event.inputs.fps }}
+          WIDTH: ${{ github.event.inputs.width }}
+          HEIGHT: ${{ github.event.inputs.height }}
+          DURATION: ${{ github.event.inputs.duration }}
+
+      - name: Mix SFX + Voiceover and Encode MP4
+        run: |
+          node -e '
+            const { execFileSync } = require("child_process");
+            const fs = require("fs");
+
+            const fps = process.env.FPS || "30";
+            const duration = process.env.DURATION || "30.1";
+            const voiceFile = process.env.AUDIO_FILE || "";
+            const sfxEvents = JSON.parse(fs.readFileSync("renders/sfx_events.json", "utf8"));
+
+            const inputs = ["-y", "-framerate", fps, "-i", "frames/frame_%06d.png"];
+            const filterParts = [];
+            const mixLabels = [];
+            let idx = 1;
+
+            if (voiceFile && fs.existsSync(voiceFile)) {
+              inputs.push("-i", voiceFile);
+              filterParts.push(`[${idx}:a]volume=1.0[a${idx}]`);
+              mixLabels.push(`[a${idx}]`);
+              idx++;
+            }
+
+            const resolveSfx = (p) => {
+              if (!p) return null;
+              if (fs.existsSync(p)) return p;
+              const alt1 = p.replace(/_2(\.[^.]+)$/, "$1");
+              if (fs.existsSync(alt1)) return alt1;
+              const alt2 = p.replace(/(\.[^.]+)$/, "_2$1");
+              if (fs.existsSync(alt2)) return alt2;
+              return null;
+            };
+
+            for (const ev of sfxEvents) {
+              const filePath = resolveSfx(ev.file || ev.src || "");
+              if (!filePath) continue;
+              const delayMs = Math.max(0, Math.round((Number(ev.time || ev.t || 0)) * 1000));
+              const vol = ev.volume !== undefined ? ev.volume : 0.75;
+              inputs.push("-i", filePath);
+              filterParts.push(`[${idx}:a]adelay=${delayMs}|${delayMs},volume=${vol}[a${idx}]`);
+              mixLabels.push(`[a${idx}]`);
+              idx++;
+            }
+
+            const args = [...inputs];
+            if (mixLabels.length > 0) {
+              filterParts.push(`${mixLabels.join("")}amix=inputs=${mixLabels.length}:duration=longest:normalize=0[aout]`);
+              args.push("-filter_complex", filterParts.join(";"));
+              args.push("-map", "0:v", "-map", "[aout]");
+              args.push("-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-t", duration, "renders/final_video.mp4");
+            } else {
+              args.push("-c:v", "libx264", "-pix_fmt", "yuv420p", "-t", duration, "renders/final_video.mp4");
+            }
+
+            execFileSync("ffmpeg", args, { stdio: "inherit" });
+          '
+        env:
+          FPS: ${{ github.event.inputs.fps }}
+          DURATION: ${{ github.event.inputs.duration }}
+          AUDIO_FILE: ${{ github.event.inputs.audio_file }}
+
+      - name: Upload Final MP4 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: karl-bushby-30s-mp4
+          path: renders/final_video.mp4
